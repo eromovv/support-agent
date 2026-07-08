@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+SUPPORTED_EXTENSIONS = (".md", ".pdf")
+
 @dataclass
 class Chunk:
     text: str
@@ -103,11 +105,40 @@ def chunk_text(text: str, source: str, strategy: str = "paragraph", **kwargs) ->
         return chunk_fixed(text, source, **kwargs)
     raise ValueError(f"Неизвестная стратегия чанкинга: {strategy}")
 
+def _clean_pdf_text(text: str) -> str:
+    text = re.sub(r"-\n(?=\w)", "", text)
+    text = re.sub(r"[ \t]*\n[ \t]*\n[ \t]*", "\n\n", text)
+    text = re.sub(r"(?<!\n)\n(?!\n)", " ", text)
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    return text.strip()
+
+def extract_pdf_text(path: str | Path) -> str:
+    from pypdf import PdfReader
+
+    reader = PdfReader(str(path))
+    pages = [page.extract_text() or "" for page in reader.pages]
+    return _clean_pdf_text("\n\n".join(pages))
+
+def read_document(path: str | Path) -> str:
+    path = Path(path)
+    suffix = path.suffix.lower()
+    if suffix == ".md":
+        return path.read_text(encoding="utf-8")
+    if suffix == ".pdf":
+        return extract_pdf_text(path)
+    raise ValueError(f"Неподдерживаемый формат файла: {suffix} ({path.name})")
+
 def chunk_directory(directory: str | Path, strategy: str = "paragraph", **kwargs) -> list[Chunk]:
     directory = Path(directory)
+    paths = sorted(
+        p for p in directory.iterdir()
+        if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
+    )
     all_chunks: list[Chunk] = []
-    for path in sorted(directory.glob("*.md")):
-        text = path.read_text(encoding="utf-8")
+    for path in paths:
+        text = read_document(path)
+        if not text.strip():
+            continue
         all_chunks.extend(chunk_text(text, source=path.name, strategy=strategy, **kwargs))
     return all_chunks
 

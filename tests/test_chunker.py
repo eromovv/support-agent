@@ -3,7 +3,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from ingestion.chunker import chunk_fixed, chunk_paragraph, chunk_text
+from ingestion.chunker import (
+    _clean_pdf_text,
+    chunk_fixed,
+    chunk_paragraph,
+    chunk_text,
+    read_document,
+)
 
 SAMPLE_MD = """# Заголовок один
 
@@ -49,3 +55,17 @@ def test_chunk_ids_unique():
     chunks = chunk_paragraph(SAMPLE_MD, source="test.md", target_words=15)
     ids = [c.chunk_id for c in chunks]
     assert len(ids) == len(set(ids)), "chunk_id должны быть уникальны"
+
+def test_clean_pdf_text_dehyphenates_and_joins_lines():
+    raw = "Возврат средств осуществля-\nется в течение\n14 дней.\n\nВторой абзац политики."
+    cleaned = _clean_pdf_text(raw)
+    assert "осуществляется" in cleaned
+    assert "в течение 14 дней." in cleaned
+    assert "\n\n" in cleaned
+
+def test_read_document_rejects_unsupported_format():
+    try:
+        read_document("some_file.txt")
+        assert False, "должна была быть ValueError"
+    except ValueError:
+        pass
