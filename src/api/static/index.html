@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Support Agent</title>
+<style>
+  :root {
+    --bg: #0f1216;
+    --panel: #171b21;
+    --panel-2: #1f242c;
+    --border: #2a313b;
+    --text: #e6e9ef;
+    --muted: #8a94a4;
+    --accent: #4f8cff;
+    --accent-2: #345eb8;
+    --user: #2a4a86;
+    --assistant: #232830;
+    --tool: #2a2416;
+    --danger: #b34747;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+  }
+  header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--panel);
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header .status { color: var(--muted); font-size: 12px; }
+  .tabs { display: flex; gap: 4px; margin-left: auto; }
+  .tab {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .tab.active { color: var(--text); background: var(--panel-2); border-color: var(--accent-2); }
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 55px);
+  }
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 4px 4px 20px;
+  }
+  .msg {
+    padding: 12px 14px;
+    border-radius: 10px;
+    max-width: 85%;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    line-height: 1.5;
+  }
+  .msg.user { align-self: flex-end; background: var(--user); }
+  .msg.assistant { align-self: flex-start; background: var(--assistant); border: 1px solid var(--border); }
+  .msg.error { align-self: flex-start; background: var(--danger); color: #fff; }
+  .meta {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+  details.tools {
+    margin-top: 8px;
+    background: var(--tool);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+  details.tools summary { cursor: pointer; color: var(--muted); }
+  details.tools pre {
+    margin: 8px 0 4px;
+    padding: 8px;
+    background: #10141a;
+    border-radius: 4px;
+    overflow-x: auto;
+    color: #c9d1d9;
+    font-size: 12px;
+  }
+  form {
+    display: flex;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  textarea {
+    flex: 1;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    resize: none;
+    font-family: inherit;
+    font-size: 14px;
+    min-height: 44px;
+    max-height: 160px;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  button.send {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0 20px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  button.send:disabled { opacity: 0.5; cursor: not-allowed; }
+  .typing { color: var(--muted); font-style: italic; }
+  #tickets {
+    display: none;
+    flex: 1;
+    overflow-y: auto;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    vertical-align: top;
+  }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; }
+  .empty { color: var(--muted); padding: 24px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Support Agent</h1>
+  <span class="status" id="status">готов</span>
+  <div class="tabs">
+    <button class="tab active" data-tab="chat">Чат</button>
+    <button class="tab" data-tab="tickets">Тикеты</button>
+  </div>
+</header>
+<main>
+  <div id="chat">
+    <div class="msg assistant">Здравствуйте! Задайте вопрос по базе знаний, или попросите завести тикет / эскалировать проблему.</div>
+  </div>
+  <div id="tickets"><div class="empty">Загрузка…</div></div>
+  <form id="form">
+    <textarea id="input" placeholder="Ваш вопрос…" rows="1"></textarea>
+    <button class="send" id="send" type="submit">Отправить</button>
+  </form>
+</main>
+<script>
+  const API_BASE = (() => {
+    const override = new URLSearchParams(location.search).get("api");
+    if (override) return override.replace(/\/$/, "");
+    if (location.protocol === "http:" || location.protocol === "https:") return "";
+    return "http://127.0.0.1:8000";
+  })();
+  const apiUrl = (p) => API_BASE + p;
+
+  const chatEl = document.getElementById("chat");
+  const ticketsEl = document.getElementById("tickets");
+  const form = document.getElementById("form");
+  const input = document.getElementById("input");
+  const sendBtn = document.getElementById("send");
+  const statusEl = document.getElementById("status");
+  const tabs = document.querySelectorAll(".tab");
+
+  function addMsg(role, text, meta) {
+    const div = document.createElement("div");
+    div.className = "msg " + role;
+    div.textContent = text;
+    if (meta) {
+      const m = document.createElement("div");
+      m.className = "meta";
+      m.textContent = meta;
+      div.appendChild(m);
+    }
+    chatEl.appendChild(div);
+    chatEl.scrollTop = chatEl.scrollHeight;
+    return div;
+  }
+
+  function addToolLog(parent, toolCalls) {
+    if (!toolCalls || !toolCalls.length) return;
+    const det = document.createElement("details");
+    det.className = "tools";
+    const sum = document.createElement("summary");
+    sum.textContent = `Инструменты (${toolCalls.length})`;
+    det.appendChild(sum);
+    const pre = document.createElement("pre");
+    pre.textContent = toolCalls.map((tc, i) =>
+      `#${i+1} ${tc.name}\nargs: ${JSON.stringify(tc.arguments, null, 2)}\nresult: ${JSON.stringify(tc.result, null, 2)}`
+    ).join("\n\n");
+    det.appendChild(pre);
+    parent.appendChild(det);
+  }
+
+  input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 160) + "px";
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    addMsg("user", text);
+    input.value = "";
+    input.style.height = "auto";
+    sendBtn.disabled = true;
+    statusEl.textContent = "агент думает…";
+    const typing = addMsg("assistant", "…");
+    typing.classList.add("typing");
+    try {
+      const res = await fetch(apiUrl("/chat"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+      const data = await res.json();
+      typing.remove();
+      if (!res.ok) {
+        addMsg("error", data.detail || `Ошибка ${res.status}`);
+      } else {
+        const meta = `${data.model} · ${data.rounds_used} раунд(ов) · ${data.latency_seconds.toFixed(2)}с`;
+        const msgEl = addMsg("assistant", data.answer, meta);
+        addToolLog(msgEl, data.tool_calls_log);
+      }
+    } catch (err) {
+      typing.remove();
+      addMsg("error", "Сеть недоступна: " + err.message);
+    } finally {
+      sendBtn.disabled = false;
+      statusEl.textContent = "готов";
+      input.focus();
+    }
+  });
+
+  async function loadTickets() {
+    ticketsEl.innerHTML = '<div class="empty">Загрузка…</div>';
+    try {
+      const res = await fetch(apiUrl("/tickets"));
+      const rows = await res.json();
+      if (!rows.length) {
+        ticketsEl.innerHTML = '<div class="empty">Тикетов пока нет.</div>';
+        return;
+      }
+      const cols = Object.keys(rows[0]);
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      thead.innerHTML = "<tr>" + cols.map(c => `<th>${c}</th>`).join("") + "</tr>";
+      table.appendChild(thead);
+      const tbody = document.createElement("tbody");
+      for (const r of rows) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = cols.map(c => `<td></td>`).join("");
+        cols.forEach((c, i) => tr.children[i].textContent = r[c] ?? "");
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      ticketsEl.innerHTML = "";
+      ticketsEl.appendChild(table);
+    } catch (err) {
+      ticketsEl.innerHTML = '<div class="empty">Не удалось загрузить: ' + err.message + '</div>';
+    }
+  }
+
+  tabs.forEach(t => t.addEventListener("click", () => {
+    tabs.forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    const which = t.dataset.tab;
+    if (which === "chat") {
+      chatEl.style.display = "flex";
+      ticketsEl.style.display = "none";
+      form.style.display = "flex";
+    } else {
+      chatEl.style.display = "none";
+      ticketsEl.style.display = "block";
+      form.style.display = "none";
+      loadTickets();
+    }
+  }));
+
+  input.focus();
+</script>
+</body>
+</html>
