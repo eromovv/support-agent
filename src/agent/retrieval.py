@@ -42,9 +42,11 @@ def _get_bm25_index():
         _bm25_index = BM25Okapi(tokenized)
     return _bm25_index
 
+QUERY_PREFIX = "query: "
+
 def semantic_search(query: str, top_k: int = 5) -> list[dict]:
     model = _get_embedding_model()
-    query_vector = model.encode(query, normalize_embeddings=True).tolist()
+    query_vector = model.encode(QUERY_PREFIX + query, normalize_embeddings=True).tolist()
 
     client = QdrantClient(url=QDRANT_URL)
     hits = client.query_points(

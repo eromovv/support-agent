@@ -10,7 +10,8 @@ from sentence_transformers import SentenceTransformer
 
 from ingestion.chunker import Chunk, chunk_directory
 
-DEFAULT_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+DEFAULT_MODEL_NAME = "intfloat/multilingual-e5-base"
+PASSAGE_PREFIX = "passage: "
 
 def get_embedding_model(model_name: str = DEFAULT_MODEL_NAME) -> SentenceTransformer:
     return SentenceTransformer(model_name)
@@ -29,7 +30,9 @@ def embed_and_store(
         raise RuntimeError(f"В {raw_docs_dir} не найдено ни одного .md файла")
 
     model = get_embedding_model(embedding_model_name)
-    vectors = model.encode([c.text for c in chunks], show_progress_bar=True, normalize_embeddings=True)
+    vectors = model.encode(
+        [PASSAGE_PREFIX + c.text for c in chunks], show_progress_bar=True, normalize_embeddings=True
+    )
     vector_size = vectors.shape[1]
 
     client = QdrantClient(url=qdrant_url)
