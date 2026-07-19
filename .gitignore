@@ -12,5 +12,4 @@ tickets.db
 .pytest_cache/
 *.egg-info/
 .idea/
-README.md
 docs/
